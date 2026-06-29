@@ -28,7 +28,7 @@ jobs:
 
       - name: Verify SHA-256 checksum
         run: |
-          echo "$ARTIFACT_SHA256  artifact.tar.gz" | sha256sum --check
+          printf '%s  artifact.tar.gz\n' "$ARTIFACT_SHA256" | sha256sum --check
 
       - name: Extract artifact
         run: |
