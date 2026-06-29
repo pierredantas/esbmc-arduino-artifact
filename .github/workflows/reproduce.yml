@@ -3,14 +3,13 @@ name: Reproducibility Check — ESBMC-Arduino
 on:
   push:
     branches: [main]
-  workflow_dispatch:          # permite rodar manualmente pela UI do GitHub
+  workflow_dispatch:
   schedule:
-    - cron: '0 3 1 * *'      # roda automaticamente todo dia 1 do mês
+    - cron: '0 3 1 * *'
 
 env:
   ZENODO_DOI: "10.5281/zenodo.21014210"
   ARTIFACT_URL: "https://zenodo.org/records/21014210/files/esbmc-arduino-artifact.tar.gz"
-  ARTIFACT_SHA256: "F1e75cc13d725d081ad6394d00663678b9e111ed65816094c1926df777417a991"   # substitui pelo hash real
 
 jobs:
   reproduce:
@@ -40,19 +39,27 @@ jobs:
           tar -xzf artifact.tar.gz -C artifact --strip-components=1
           ls -la artifact/
 
-      # ── 2. Cache do build do ESBMC (evita rebuild a cada run) ───────────────
+      # ── 2. Cache do build do ESBMC ───────────────────────────────────────────
       - name: Cache ESBMC build
         id: cache-esbmc
         uses: actions/cache@v4
         with:
           path: |
-            artifact/esbmc/build
-            ~/.local/lib/esbmc
-          key: esbmc-build-${{ runner.os }}-${{ hashFiles('artifact/esbmc/**/*.cpp', 'artifact/esbmc/**/*.h', 'artifact/esbmc/CMakeLists.txt') }}
+            artifact/build
+            ~/.esbmc-arduino
+          key: esbmc-arduino-${{ runner.os }}-${{ hashFiles('artifact/esbmc-src.tar.gz', 'artifact/setup.sh') }}
           restore-keys: |
-            esbmc-build-${{ runner.os }}-
+            esbmc-arduino-${{ runner.os }}-
 
-      # ── 3. Setup: instala CBMC, Frama-C, MATIEC e builda ESBMC ─────────────
+      # ── 3. Dependências de sistema para Frama-C (via opam) ───────────────────
+      - name: Pre-install Frama-C system dependencies
+        if: steps.cache-esbmc.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get install -y libgtk-3-dev libgtksourceview-3.0-dev
+        env:
+          DEBIAN_FRONTEND: noninteractive
+
+      # ── 4. Setup completo ────────────────────────────────────────────────────
       - name: Run setup.sh
         if: steps.cache-esbmc.outputs.cache-hit != 'true'
         working-directory: artifact
@@ -61,44 +68,49 @@ jobs:
           bash setup.sh
         env:
           DEBIAN_FRONTEND: noninteractive
+          OPAMYES: "1"
+          OPAM_ASSUME_DEPEXTS: "true"
 
-      - name: Run setup.sh (deps only, ESBMC from cache)
-        if: steps.cache-esbmc.outputs.cache-hit == 'true'
-        working-directory: artifact
-        run: |
-          chmod +x setup.sh
-          SKIP_ESBMC_BUILD=1 bash setup.sh || bash setup.sh
-        env:
-          DEBIAN_FRONTEND: noninteractive
-
-      # ── 4. Verifica que as ferramentas estão disponíveis ────────────────────
+      # ── 5. Verifica que as ferramentas estão disponíveis ─────────────────────
       - name: Sanity-check tools
         working-directory: artifact
         run: |
-          echo "=== ESBMC ===" && esbmc --version || ./esbmc --version || find . -name esbmc -type f -exec {} --version \;
-          echo "=== CBMC ===" && cbmc --version
-          echo "=== Frama-C ===" && frama-c -version
-          echo "=== MATIEC ===" && iec2c --help 2>&1 | head -5 || true
+          echo "=== CBMC ==="
+          cbmc --version
+          echo "=== MATIEC ==="
+          ~/.esbmc-arduino/matiec/iec2c --help 2>&1 | head -3 || true
+          echo "=== ESBMC ==="
+          ~/.esbmc-arduino/bin/esbmc --version 2>&1 | head -3 || \
+          find ~/.esbmc-arduino -name esbmc -type f -exec {} --version \; 2>&1 | head -3 || \
+          find artifact/build -name esbmc -type f -exec {} --version \; 2>&1 | head -3 || \
+          echo "ESBMC not found in expected paths — check setup.sh install prefix"
+          echo "=== Frama-C ==="
+          eval $(opam env --switch=frama 2>/dev/null) || true
+          frama-c -version 2>/dev/null || \
+          ~/.opam/frama/bin/frama-c -version 2>/dev/null || \
+          echo "Frama-C not found in PATH — may need eval opam env"
 
-      # ── 5. Reprodução dos experimentos ──────────────────────────────────────
+      # ── 6. Reprodução dos experimentos ───────────────────────────────────────
       - name: Run reproduce.sh
         working-directory: artifact
         run: |
           chmod +x reproduce.sh
+          eval $(opam env --switch=frama 2>/dev/null) || true
           bash reproduce.sh 2>&1 | tee reproduce.log
 
-      # ── 6. Upload dos resultados ─────────────────────────────────────────────
+      # ── 7. Upload dos resultados ─────────────────────────────────────────────
       - name: Upload results and log
-        if: always()       # sobe mesmo se o job falhar — útil para debug
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: reproduction-results-${{ github.run_id }}
           path: |
             artifact/results/
             artifact/reproduce.log
+          if-no-files-found: warn
           retention-days: 90
 
-      # ── 7. Resumo no GitHub Actions UI ──────────────────────────────────────
+      # ── 8. Resumo no GitHub Actions UI ───────────────────────────────────────
       - name: Write job summary
         if: always()
         run: |
