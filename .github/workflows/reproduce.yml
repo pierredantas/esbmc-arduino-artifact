@@ -21,8 +21,7 @@ jobs:
       - name: Download artifact + checksums from Zenodo
         run: |
           SHA_URL="${ARTIFACT_URL%/*}/SHA256SUMS"
-          wget --progress=dot:giga --retry-connrefused --tries=3 \
-               -O esbmc-arduino-artifact.tar.gz "$ARTIFACT_URL"
+          wget --progress=dot:giga --retry-connrefused --tries=3 -O esbmc-arduino-artifact.tar.gz "$ARTIFACT_URL"
           wget --retry-connrefused --tries=3 -O SHA256SUMS "$SHA_URL"
 
       - name: Verify SHA-256 integrity
@@ -64,28 +63,26 @@ jobs:
         working-directory: artifact
         run: |
           ESBMC="$HOME/.esbmc-arduino/esbmc-src/build/src/esbmc/esbmc"
-          test -x "$ESBMC" || { echo "::error::ESBMC binary not found at $ESB
+          test -x "$ESBMC"
           "$ESBMC" --version
-          out=$("$ESBMC" experiments/gen/A_bug__abstract.c --z3 --no-pointer-|| true
-          echo "$out"
-          echo "$out" | grep -qE 'VERIFICATION (SUCCESSFUL|FAILED)' \
-            || { echo "::error::ESBMC produced no verdict — Z3 backend missing"; exit 1; }
-          strings "$ESBMC" | grep -q HAL_ANNOTATE \
-            || { echo "::error::HAL_ANNOTATE not in binary — LD frontend not compiled"; exit 1; }
-          echo "Z3 verdict produced and HAL_ANNOTATE present"
+          "$ESBMC" experiments/gen/A_bug__abstract.c --z3 --no-pointer-check --no-align-check 2>&1 | tee /tmp/v.txt
+          grep -qE 'VERIFICATION (SUCCESSFUL|FAILED)' /tmp/v.txt
+          strings "$ESBMC" | grep -q HAL_ANNOTATE
+          echo "OK: Z3 verdict produced and HAL_ANNOTATE present"
 
       - name: Sanity-check tools
         run: |
-          echo "=== CBMC ==="; cbmc --version
-          echo "=== MATIEC ==="; ~/.esbmc-arduino/matiec/iec2c -v 2>&1 | head -3 || true
-          echo "=== ESBMC ==="; "$HOME/.esbmc-arduino/esbmc-src/build/src/esbad -3 || echo "ESBMC missing"
-          echo "=== Frama-C ==="; eval "$(opam env --switch=frama 2>/dev/null)" || true; frama-c -version 2>/dev/null || echo "Frama-C missing"
+          export PATH="$HOME/.opam/frama/bin:$PATH"
+          cbmc --version
+          ~/.esbmc-arduino/matiec/iec2c -v 2>&1 | head -3 || true
+          "$HOME/.esbmc-arduino/esbmc-src/build/src/esbmc/esbmc" --version | head -3
+          frama-c -version || true
 
       - name: Run reproduce.sh
         working-directory: artifact
         run: |
           chmod +x reproduce.sh
-          eval "$(opam env --switch=frama 2>/dev/null)" || true
+          export PATH="$HOME/.opam/frama/bin:$PATH"
           bash reproduce.sh 2>&1 | tee reproduce.log
 
       - name: Upload results and log
@@ -102,14 +99,7 @@ jobs:
       - name: Write job summary
         if: always()
         run: |
-          echo "## ESBMC-Arduino Reproducibility Report" >> $GITHUB_STEP_SUMM
-          echo "| Item | Value |" >> $GITHUB_STEP_SUMMARY
-          echo "|------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Zenodo DOI | \`$ZENODO_DOI\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| Run ID | \`${{ github.run_id }}\` |" >> $GITHUB_STEP_SUMMAR
-          echo "" >> $GITHUB_STEP_SUMMARY
-          if [ -f artifact/reproduce.log ]; then
-            echo '```' >> $GITHUB_STEP_SUMMARY
-            tail -30 artifact/reproduce.log >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-          fi
+          echo "## ESBMC-Arduino Reproducibility Report" >> "$GITHUB_STEP_SUMMARY"
+          echo "Zenodo DOI: $ZENODO_DOI" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          tail -30 artifact/reproduce.log >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
