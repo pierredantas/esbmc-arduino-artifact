@@ -54,8 +54,3 @@ If you use this CI setup as evidence of reproducibility, cite the Zenodo record 
   doi       = {10.5281/zenodo.21014209},
   publisher = {Zenodo}
 }
-
-Changes vs. your current README:
-- **DOI** → concept DOI `21014209` (was the broken v1 `21014210`), in both the prose and the BibTeX.
-- **Integrity row** → now accurately says SHA-256 verification (matches the workflow step you're adding).
-- Added **Download `SHA256SUMS`**, a **Cache** row, a **Verify** (Z3 + HAL) row, the **LLVM 18 / Z3 / LD-frontend** build detail, and a **Claims verified** table.
