@@ -9,6 +9,67 @@ This repository hosts the **GitHub Actions CI** that validates the reproducibili
 
 The workflow runs on a **clean Ubuntu 22.04 runner** — no pre-installed ESBMC, CBMC, or Frama-C — and mirrors exactly what a reviewer would do following the artifact's instructions. It builds the verifier **from source** (no cached binaries), so a green run proves the artifact is reproducible end-to-end on a fresh machine.
 
+## Quick Start — Run on Your Machine
+
+### Prerequisites
+- **Ubuntu 22.04** (recommended; macOS is partially supported — see notes in `setup.sh`)
+- `git`, `sudo`, internet access
+- The Zenodo tarball (`esbmc-arduino-artifact.tar.gz`) — download from [10.5281/zenodo.21014209](https://doi.org/10.5281/zenodo.21014209)
+
+---
+
+### 1. Download and extract the artifact
+
+```bash
+tar xzf esbmc-arduino-artifact.tar.gz
+cd esbmc-arduino-artifact
+```
+
+### 2. Run setup (installs CBMC, Frama-C, MATIEC, and builds patched ESBMC from source)
+
+```bash
+bash setup.sh
+```
+
+> ⏱ **This takes ~10–20 minutes** on first run — ESBMC is built from source against LLVM 18.  
+> Subsequent runs are cached. `sudo` is required for `apt` dependencies.  
+> On completion, `env.sh` is written automatically and sourced by `reproduce.sh`.
+
+### 3. Run the experiments
+
+**Quick smoke test** (~minutes — validates environment and samples key results):
+```bash
+bash reproduce.sh --smoke
+```
+
+**Full reproduction** (all claims, full corpus):
+```bash
+bash reproduce.sh --full
+```
+
+### 4. Check results
+
+Results are written to `./results/`:
+
+```
+results/
+├── keystone.csv      — Claim 1: naive vs HAL annotator on real corpus
+├── baseline.txt      — Claim 2: cross-tool (CBMC + Frama-C)
+├── real_corpus.txt   — Claim 3: MATIEC-generated C + CBMC
+└── matrix.txt        — Claim 4: controlled deployment matrix
+```
+
+---
+
+### macOS note
+macOS is partially supported. The setup script requires [Homebrew](https://brew.sh) and builds ESBMC against `llvm@18` (must match exactly). If the build fails, use Ubuntu 22.04 or provide a prebuilt ESBMC binary with the HAL annotator:
+
+```bash
+ESBMC=/path/to/prebuilt/esbmc bash setup.sh
+```
+
+---
+
 ## What the workflow does
 
 | Step | Description |
@@ -54,3 +115,4 @@ If you use this CI setup as evidence of reproducibility, cite the Zenodo record 
   doi       = {10.5281/zenodo.21014209},
   publisher = {Zenodo}
 }
+
