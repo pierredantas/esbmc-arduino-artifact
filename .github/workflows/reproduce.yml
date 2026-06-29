@@ -8,8 +8,8 @@ on:
     - cron: '0 3 1 * *'
 
 env:
-  ZENODO_DOI: "10.5281/zenodo.21016007"
-  ARTIFACT_URL: "https://zenodo.org/records/21016007/files/esbmc-arduino-artifact.tar.gz"
+  ZENODO_DOI: "10.5281/zenodo.21016498"
+  ARTIFACT_URL: "https://zenodo.org/records/21016498/files/esbmc-arduino-artifact.tar.gz"
 
 jobs:
   reproduce:
@@ -29,7 +29,7 @@ jobs:
         run: |
           SIZE=$(stat -c%s artifact.tar.gz)
           echo "Downloaded ${SIZE} bytes"
-          [ "$SIZE" -gt 5000000 ] && echo "OK (size check passed)" || { echo "File too small"; exit 1; }
+          [ "$SIZE" -gt 70000000 ] && echo "OK" || { echo "File too small"; exit 1; }
 
       - name: Extract artifact
         run: |
